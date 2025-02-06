@@ -1,56 +1,48 @@
 import crypto from "crypto";
 import { SignJWT } from "jose";
 import dotenv from "dotenv";
+import { logEvent } from "./logger";
 
 dotenv.config();
 
 const authCodes = new Map<string, { clientId: string; expiresAt: number }>();
+const refreshTokens = new Map<string, { clientId: string; expiresAt: number }>();
 
-/**
- * Generates a unique authorization code and stores it temporarily.
- * @param clientId The client requesting authorization.
- * @returns The generated authorization code.
- */
 export function generateAuthCode(clientId: string): string {
   const authCode = crypto.randomBytes(16).toString("hex");
   const expiresAt = Date.now() + 5 * 60 * 1000;
 
   authCodes.set(authCode, { clientId, expiresAt });
 
+  logEvent(`Generated authorization code for client ${clientId}`);
   return authCode;
 }
 
-/**
- * Validates an authorization code and removes it after use.
- * @param authCode The authorization code to validate.
- * @param clientId The client using the code.
- * @returns True if the code is valid, otherwise false.
- */
 export function validateAuthCode(authCode: string, clientId: string): boolean {
   const storedCode = authCodes.get(authCode);
 
   if (!storedCode) {
-    return false; // Code does not exist
+    logEvent(`Failed authorization code validation: Code not found`);
+    return false;
   }
 
   if (storedCode.clientId !== clientId) {
-    return false; // Client mismatch
+    logEvent(`Failed authorization code validation: Client mismatch`);
+    return false;
   }
 
   if (storedCode.expiresAt < Date.now()) {
+    logEvent(`Failed authorization code validation: Code expired`);
     authCodes.delete(authCode);
-    return false; // Code expired
+    return false;
   }
 
-  // Valid code, remove it after use
   authCodes.delete(authCode);
   return true;
 }
 
 /**
  * Generates a JWT access token.
- * @param clientId The client associated with the token.
- * @returns A signed JWT access token.
  */
 export async function generateAccessToken(clientId: string): Promise<string> {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET || "default_secret");
@@ -60,4 +52,37 @@ export async function generateAccessToken(clientId: string): Promise<string> {
     .setIssuedAt()
     .setExpirationTime("1h")
     .sign(secret);
+}
+
+
+export function generateRefreshToken(clientId: string): string {
+  const refreshToken = crypto.randomBytes(32).toString("hex");
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+
+  refreshTokens.set(refreshToken, { clientId, expiresAt });
+
+  logEvent(`Generated refresh token for client ${clientId}`);
+  return refreshToken;
+}
+
+export function validateRefreshToken(refreshToken: string, clientId: string): boolean {
+  const storedToken = refreshTokens.get(refreshToken);
+
+  if (!storedToken) {
+    logEvent(`Failed refresh token validation: Token not found`);
+    return false;
+  }
+
+  if (storedToken.clientId !== clientId) {
+    logEvent(`Failed refresh token validation: Client mismatch`);
+    return false;
+  }
+
+  if (storedToken.expiresAt < Date.now()) {
+    logEvent(`Failed refresh token validation: Token expired`);
+    refreshTokens.delete(refreshToken);
+    return false;
+  }
+
+  return true;
 }
