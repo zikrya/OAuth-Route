@@ -1,4 +1,8 @@
 import crypto from "crypto";
+import { SignJWT } from "jose";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const authCodes = new Map<string, { clientId: string; expiresAt: number }>();
 
@@ -26,23 +30,34 @@ export function validateAuthCode(authCode: string, clientId: string): boolean {
   const storedCode = authCodes.get(authCode);
 
   if (!storedCode) {
-    return false;
+    return false; // Code does not exist
   }
 
   if (storedCode.clientId !== clientId) {
-    return false;
+    return false; // Client mismatch
   }
 
   if (storedCode.expiresAt < Date.now()) {
     authCodes.delete(authCode);
-    return false;
+    return false; // Code expired
   }
 
+  // Valid code, remove it after use
   authCodes.delete(authCode);
   return true;
 }
 
-export default {
-  generateAuthCode,
-  validateAuthCode,
-};
+/**
+ * Generates a JWT access token.
+ * @param clientId The client associated with the token.
+ * @returns A signed JWT access token.
+ */
+export async function generateAccessToken(clientId: string): Promise<string> {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET || "default_secret");
+
+  return new SignJWT({ clientId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(secret);
+}
