@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import crypto from "crypto";
+import auth from "../utils/auth"
 
 const router = Router();
 
@@ -13,11 +13,13 @@ interface AuthRequestQuery {
   state?: string;
 }
 
+
 router.get(
   "/oauth/authorize",
   (req: Request<{}, {}, {}, Partial<AuthRequestQuery>>, res: Response) => {
     const { response_type, client_id, redirect_uri, state } = req.query;
 
+    // Validate required parameters
     if (!response_type || !client_id || !redirect_uri) {
       return res.status(400).json({
         error: "invalid_request",
@@ -39,7 +41,7 @@ router.get(
       });
     }
 
-    const authorizationCode = crypto.randomBytes(16).toString("hex");
+    const authorizationCode = auth.generateAuthCode(client_id);
 
     let redirectUrl = `${redirect_uri}?code=${authorizationCode}`;
     if (state) {
