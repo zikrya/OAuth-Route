@@ -25,5 +25,5 @@ export function validateAuthRequest(req: Request, res: Response, next: NextFunct
     });
   }
 
-  next(); // ✅ This ensures the request moves forward if valid
+  next();
 }
