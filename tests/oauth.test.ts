@@ -92,7 +92,6 @@ describe("OAuth 2.0 Authorization and Token Exchange", () => {
     expect(res.body.error).toBe("invalid_grant");
   });
 
-
   it("should reject unsupported grant types", async () => {
     const res = await request(app)
       .post("/api/oauth/token")
@@ -104,4 +103,33 @@ describe("OAuth 2.0 Authorization and Token Exchange", () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("unsupported_grant_type");
   });
+
+  it("should enforce rate limiting on /oauth/token", async () => {
+    let lastResponse: request.Response | null = null;
+    let rateLimitHit = false;
+
+    for (let i = 0; i < 6; i++) {
+      const res = await request(app)
+        .post("/api/oauth/token")
+        .send({
+          grant_type: "authorization_code",
+          code: authCode,
+          client_id: "upfirst",
+          redirect_uri: "http://localhost:8081/process",
+        });
+
+      lastResponse = res;
+
+      if (res.status === 429) {
+        rateLimitHit = true;
+        break;
+      }
+    }
+
+    expect(rateLimitHit).toBe(true);
+    expect(lastResponse).not.toBeNull();
+    expect(lastResponse!.status).toBe(429);
+    expect(lastResponse!.body.error).toBe("too_many_requests");
+  });
+
 });
